@@ -49,6 +49,8 @@ import Grid from "@mui/material/Grid";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { LinkComponent, ShowIcon } from "@components/DataGrid";
+import MaskedData from "@components/common/MaskedData";
+import { MaskType } from "@utils/maskingUtils";
 
 const DashboardCard = dynamic(() => import("../../components/Dashboard/DashboardCard"), {
   ssr: false,
@@ -73,6 +75,46 @@ const BackofficePage: NextPage = () => {
     login?.data?.admin_type === "mf_user" ||
     login?.data?.admin_type === "sub_user" ||
     login?.data?.admin_type === "stx_user";
+
+  // Define sensitive fields that need masking
+  const MASKED_FIELDS = {
+    pan_number: MaskType.PAN,
+    mobile_number: MaskType.MOBILE,
+    email: MaskType.EMAIL,
+    aadhaar_number: MaskType.AADHAAR,
+  };
+
+  // Create columns with masking for sensitive fields
+  const createMaskedColumns = (obj: Record<string, any>) => {
+    return Object.keys(obj || {}).map((key) => {
+      const maskType = MASKED_FIELDS[key as keyof typeof MASKED_FIELDS];
+
+      if (maskType) {
+        return {
+          key,
+          RenderBodyCell: ({ row }: { row: any }) => {
+            if (row === null) return <div>--</div>;
+            return (
+              <MaskedData
+                data={row[key] || ''}
+                type={maskType}
+                variant="body2"
+                showIcon={true}
+                sx={{ 
+                  minWidth: '120px',
+                  '& .MuiIconButton-root': {
+                    color: 'primary.main'
+                  }
+                }}
+              />
+            );
+          },
+        };
+      }
+
+      return { key };
+    });
+  };
 
   // For mf_user and sub_user: use eKYC query
   const filtersWithReferral = {
@@ -318,9 +360,18 @@ const BackofficePage: NextPage = () => {
           isError={isError}
           initialColumns={initialColumns}
           columns={getColumnKeys(reorderedObj)}
-          copyFields={["email", "mobile_number"]}
+          copyFields={[]}
           id="id"
           customColumns={[
+            // Add masked columns for sensitive data
+            ...createMaskedColumns(reorderedObj)
+              .filter(col => MASKED_FIELDS[col.key as keyof typeof MASKED_FIELDS])
+              .map(col => ({
+                position: "start" as const,
+                label: col.key.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" "),
+                RenderHeadCell: () => <div></div>,
+                RenderBodyCell: col.RenderBodyCell!,
+              })),
             {
               position: "start",
               label: isAllowedUser ? "Show" : "Assist Client",

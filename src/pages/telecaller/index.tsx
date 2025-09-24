@@ -28,6 +28,9 @@ import { useGetTalismaAccessTokenMutation, useGetTalismaEkycMutation } from "ser
 import { AgentEkyc } from "types/ekyc";
 import { ApplicationStatus } from "types/links";
 import * as Yup from "yup";
+import MaskedData from "@components/common/MaskedData";
+import { MaskType } from "@utils/maskingUtils";
+
 const TelecallerPage: NextPage = () => {
   const [getTalismaEkyc] = useGetTalismaEkycMutation();
   const [getTalismaAccessToken, { isLoading }] = useGetTalismaAccessTokenMutation();
@@ -245,10 +248,43 @@ const TelecallerPage: NextPage = () => {
                     </Button>
                   </TableCell>
                   <TableCell>{ekyc?.client_id || "--"}</TableCell>
-                  <TableCell>{ekyc?.pan_number || "--"}</TableCell>
+                  <TableCell>
+                    {ekyc?.pan_number ? (
+                      <MaskedData
+                        data={ekyc.pan_number}
+                        type={MaskType.PAN}
+                        variant="body2"
+                        showIcon={true}
+                      />
+                    ) : (
+                      "--"
+                    )}
+                  </TableCell>
                   <TableCell>{ekyc?.full_name || "--"}</TableCell>
-                  <TableCell>{ekyc?.mobile_number || "--"}</TableCell>
-                  <TableCell>{ekyc?.email || "--"}</TableCell>
+                  <TableCell>
+                    {ekyc?.mobile_number ? (
+                      <MaskedData
+                        data={ekyc.mobile_number}
+                        type={MaskType.MOBILE}
+                        variant="body2"
+                        showIcon={true}
+                      />
+                    ) : (
+                      "--"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {ekyc?.email ? (
+                      <MaskedData
+                        data={ekyc.email}
+                        type={MaskType.EMAIL}
+                        variant="body2"
+                        showIcon={true}
+                      />
+                    ) : (
+                      "--"
+                    )}
+                  </TableCell>
                   <TableCell>{ekyc?.date_of_birth || "--"}</TableCell>
                   <TableCell>{prettyPrintDate(ekyc?.created_at) || "--"}</TableCell>
                   <TableCell>{prettyPrintDate(ekyc?.updated_at) || "--"}</TableCell>

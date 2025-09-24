@@ -46,6 +46,8 @@ import {
 import { useDispatch } from "react-redux";
 import appSlice from "slices/app.slice";
 import { useRouter } from "next/router";
+import MaskedData from "@components/common/MaskedData";
+import { MaskType } from "@utils/maskingUtils";
 
 const Card = dynamic(() => import("../../components/Dashboard/DashboardCard"), {
   ssr: false,
@@ -71,6 +73,47 @@ const Dashboard: NextPage = () => {
   const dispatch = useDispatch();
 
   const router = useRouter();
+
+  // Define sensitive fields that need masking
+  const MASKED_FIELDS = {
+    pan_number: MaskType.PAN,
+    mobile_number: MaskType.MOBILE,
+    email: MaskType.EMAIL,
+    aadhaar_number: MaskType.AADHAAR,
+  };
+
+  // Create columns with masking for sensitive fields
+  const createMaskedColumns = (obj: Record<string, any>) => {
+    return Object.keys(obj || {}).map((key) => {
+      const maskType = MASKED_FIELDS[key as keyof typeof MASKED_FIELDS];
+
+      if (maskType) {
+        return {
+          key,
+          RenderBodyCell: ({ row }: { row: any }) => {
+            if (row === null) return <div>--</div>;
+            return (
+              <MaskedData
+                data={row[key] || ''}
+                type={maskType}
+                variant="body2"
+                showIcon={true}
+                sx={{ 
+                  minWidth: '120px',
+                  '& .MuiIconButton-root': {
+                    color: 'primary.main'
+                  }
+                }}
+              />
+            );
+          },
+        };
+      }
+
+      return { key };
+    });
+  };
+
   React.useEffect(() => {
     if (
       login?.data.admin_type === "mf_user" ||
@@ -327,18 +370,21 @@ const Dashboard: NextPage = () => {
                 date_of_birth: "DOB",
               }}
               dates={["updated_at", "created_at", "date_of_birth"]}
-              copyFields={[
-                "pan_number",
-                "locked_by_admin_username",
-                "full_name",
-                "email",
-                "referral_code",
-              ]}
+              copyFields={["locked_by_admin_username", "full_name", "referral_code"]}
               id="client_id"
               hide={["app_status"]}
               customColumns={
                 clientData?.length > 0
                   ? [
+                      // Add masked columns for sensitive data
+                      ...createMaskedColumns(reorderedObj)
+                        .filter(col => MASKED_FIELDS[col.key as keyof typeof MASKED_FIELDS])
+                        .map(col => ({
+                          position: "start" as const,
+                          label: col.key.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" "),
+                          RenderHeadCell: () => <div></div>,
+                          RenderBodyCell: col.RenderBodyCell!,
+                        })),
                       {
                         position: "start",
                         label: "Show",
