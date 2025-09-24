@@ -1,0 +1,8 @@
+.next
+public
+node_modules
+.git
+.husky
+next.config.js
+test
+.eslintrc.json

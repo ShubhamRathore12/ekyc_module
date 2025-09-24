@@ -1,0 +1,217 @@
+import { Box, Button, Grid, TextField, Typography } from "@mui/material";
+import handleError from "@utils/handleError";
+import { sanitizeInput, fieldSanitizers } from "@utils/inputSanitizer";
+import { FIELD_CONSTRAINTS } from "@utils/inputValidation";
+import { useField, useFormikContext } from "formik";
+import { toast } from "react-hot-toast";
+import { useUpdateIDProofMutation } from "services/ekyc.service";
+import React from "react";
+interface IProps {
+  name: string;
+  text: string;
+  type: string;
+  placeholder?: string;
+  width?: string;
+  height?: string;
+  full_width?: boolean;
+  labelWidth?: string | number;
+  disabled?: boolean;
+  client_id?: string;
+  maxLength?: number;
+  sanitizer?: keyof typeof fieldSanitizers;
+  allowPaste?: boolean;
+}
+
+const InputField = ({
+  name,
+  text,
+  type,
+  placeholder = "",
+  width = "100%",
+  height,
+  labelWidth = 160,
+  full_width = false,
+  disabled = true,
+  client_id,
+  maxLength,
+  sanitizer = "text",
+  allowPaste = true,
+}: IProps) => {
+  const [input, meta] = useField(name);
+  const formik = useFormikContext();
+  const [securityError, setSecurityError] = React.useState<string>("");
+
+  const error = Boolean(meta.touched && (!!meta.error || !!securityError));
+  const helperText = (meta.touched && (meta.error || securityError)) || " ";
+
+  const [updateIDProof] = useUpdateIDProofMutation();
+
+  // Determine appropriate maxLength based on field type or explicit prop
+  const getMaxLength = (): number => {
+    if (maxLength) return maxLength;
+    
+    // Infer from field name or type
+    if (name.includes('email')) return FIELD_CONSTRAINTS.email.max;
+    if (name.includes('phone') || name.includes('mobile')) return FIELD_CONSTRAINTS.mobileNumber.max;
+    if (name.includes('pan')) return FIELD_CONSTRAINTS.panNumber.max;
+    if (name.includes('name')) return FIELD_CONSTRAINTS.name.max;
+    if (name.includes('address')) return FIELD_CONSTRAINTS.address.max;
+    if (name.includes('pincode')) return FIELD_CONSTRAINTS.pincode.max;
+    if (name.includes('ifsc')) return FIELD_CONSTRAINTS.ifscCode.max;
+    if (name.includes('micr')) return FIELD_CONSTRAINTS.micrCode.max;
+    if (name.includes('username')) return FIELD_CONSTRAINTS.username.max;
+    
+    // Default based on type
+    if (type === 'email') return FIELD_CONSTRAINTS.email.max;
+    if (type === 'tel') return FIELD_CONSTRAINTS.mobileNumber.max;
+    
+    return FIELD_CONSTRAINTS.mediumText.max; // Default
+  };
+
+  const actualMaxLength = getMaxLength();
+
+  // Handle input change with sanitization
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+    
+    // Apply length constraint
+    if (value.length > actualMaxLength) {
+      value = value.substring(0, actualMaxLength);
+    }
+    
+    // Apply field-specific sanitization
+    const sanitizerFn = fieldSanitizers[sanitizer];
+    if (sanitizerFn) {
+      value = sanitizerFn(value);
+    } else {
+      value = sanitizeInput(value);
+    }
+    
+    // Validate length
+    if (value.length > actualMaxLength) {
+      setSecurityError(`Maximum ${actualMaxLength} characters allowed`);
+    } else {
+      setSecurityError("");
+    }
+    
+    // Update formik field
+    formik.setFieldValue(name, value);
+  };
+
+  // Handle paste events
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (!allowPaste) {
+      e.preventDefault();
+      toast.error("Paste is not allowed for this field");
+      return;
+    }
+    
+    const pastedText = e.clipboardData.getData('text');
+    const sanitizedText = fieldSanitizers[sanitizer]?.(pastedText) || sanitizeInput(pastedText);
+    
+    if (sanitizedText !== pastedText) {
+      e.preventDefault();
+      const truncatedText = sanitizedText.substring(0, actualMaxLength);
+      formik.setFieldValue(name, truncatedText);
+      toast.error("Pasted content was sanitized for security");
+    }
+  };
+
+  return (
+    <Grid
+      justifyContent="flex-start"
+      container
+      alignItems="center"
+      sx={{
+        gap: { xs: 1, md: 0 },
+        pb: 2,
+      }}
+      // sx={{
+      //   display: "flex",
+      //   alignItems: "center",
+      //   justifyContent: "space-between",
+      //   gap: 2,
+      // }}
+      maxWidth="550px"
+    >
+      <Box sx={{ minWidth: labelWidth }}>
+        <Typography
+          variant="subtitle2"
+          sx={{
+            width: "160px",
+          }}
+        >
+          {text}
+        </Typography>
+      </Box>
+      <Grid item xs={12} md={!disabled ? 4 : 8} gap={0}>
+        <TextField
+          disabled={disabled}
+          fullWidth
+          value={input.value || ""}
+          onChange={handleInputChange}
+          onPaste={handlePaste}
+          onBlur={formik.handleBlur}
+          name={name}
+          type={type}
+          placeholder={placeholder}
+          error={error}
+          helperText={helperText}
+          inputProps={{ 
+            maxLength: actualMaxLength,
+            'data-security-sanitized': 'true',
+            autoComplete: type === 'password' ? 'new-password' : 'off'
+          }}
+          sx={{
+            borderRadius: 1,
+            width: width,
+            "& .MuiInputBase-input": {
+              bgcolor: "hsla(0, 0%, 98%, 1)",
+              height: "40px",
+              fontSize: "14px",
+              p: 0,
+              pl: 1,
+            },
+            "& .MuiFormHelperText-root": {
+              fontSize: "12px",
+              color: error ? "error.main" : "text.secondary",
+            },
+          }}
+        />
+      </Grid>
+      {!disabled && (
+        <Grid item xs={12} md={4} gap={0} sx={{ pl: { xs: "unset", md: 2 } }}>
+          <Button
+            fullWidth
+            variant="contained"
+            size="small"
+            onClick={async () => {
+              try {
+                if (client_id && input.value) {
+                  // Additional security validation before API call
+                  const sanitizedValue = fieldSanitizers[sanitizer]?.(input.value) || sanitizeInput(input.value);
+                  if (sanitizedValue.length === 0 || sanitizedValue.length > actualMaxLength) {
+                    toast.error("Invalid input length");
+                    return;
+                  }
+                  
+                  const res = await updateIDProof({
+                    client_id: client_id,
+                    id_proof_number: sanitizedValue,
+                  }).unwrap();
+                  toast.success(res?.message);
+                }
+              } catch (err) {
+                handleError(err);
+              }
+            }}
+          >
+            Verify ID
+          </Button>
+        </Grid>
+      )}
+    </Grid>
+  );
+};
+
+export default InputField;
